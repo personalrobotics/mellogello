@@ -2,17 +2,18 @@ import os, sys, io
 import M5
 from M5 import *
 from unit import KeyUnit
+from unit import Roller485Unit
 from unit import Joystick2Unit
 import time
+from hardware import UART
 import network
-from unit import Roller485Unit
 from hardware import I2C
 from hardware import Pin
+import ntptime
 
 
-
-image0 = None
 label_pwr_status = None
+rect0 = None
 label0 = None
 label1 = None
 label3 = None
@@ -25,6 +26,9 @@ label6 = None
 label_wifi_status = None
 label5 = None
 label_stream_state = None
+circle0 = None
+circle1 = None
+uart1 = None
 wlan = None
 i2c0 = None
 key_0 = None
@@ -35,40 +39,62 @@ roller485_2 = None
 roller485_3 = None
 roller485_4 = None
 roller485_5 = None
+now = None
+packets_sent = 0
+key_0_pressed = 0
 
 
-stream_is_paused = None
-k = None
-joint_init_pos = None
-joint_reported_position = None
 joint_values_measured = None
+stream_is_paused = None
+joint_init_pos = None
+k = None
+joint_reported_position = None
+previous_touch = None
 joint_signs = None
+positiontouch = None
+grbl_value = None
+import struct
+# Describe this function...
+def Stuff_in_loop():
+  global key_0_pressed, packets_sent, now, joint_values_measured, stream_is_paused, joint_init_pos, k, joint_reported_position, previous_touch, joint_signs, positiontouch, grbl_value, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
+  joint_values_measured = [roller485_0.get_motor_position_readback(), roller485_1.get_motor_position_readback(), roller485_2.get_motor_position_readback(), roller485_3.get_motor_position_readback(), roller485_4.get_motor_position_readback(), roller485_5.get_motor_position_readback(), joystick2_0.get_y_position()]
+  t_ns = time.time_ns()
+  dt = time.ticks_ms() - now
+  now = time.ticks_ms()
+  button_pressed = joystick2_0.get_button_status()
+  sec = int(t_ns // 1_000_000_000)  # integer seconds
+  nsec = int(t_ns % 1_000_000_000)  # remaining nanoseconds
+  if not stream_is_paused:
+    calc_position()
+    header = b'\xAA\xBB'
+    packets_sent += 1
+    # print({'iniital_positions':joint_init_pos,'measured_positions':joint_values_measured,'joint_positions:':joint_reported_position, 'dt:':dt, 'ps':packets_sent})
+    # print({'joint_positions:':joint_reported_position, 'dt:':dt, 'ps':packets_sent})
+    # data = struct.pack('<7f2i', *(joint_reported_position + [dt, packets_sent]))
+    data = struct.pack('<8f6i', *(joint_reported_position + [joystick2_0.get_x_position(), dt, packets_sent, button_pressed, key_0_pressed, sec, nsec]))
+    sys.stdout.buffer.write(header + data)
+    # sys.stdout.flush()
+    # time.sleep_ms(1)
+  # key_0_pressed = 0
+  # label0.setText(str(joint_reported_position[0]))
+  # label1.setText(str(joint_reported_position[1]))
+  # label2.setText(str(joint_reported_position[2]))
+  # label3.setText(str(joint_reported_position[3]))
+  # label4.setText(str(joint_reported_position[4]))
+  # label5.setText(str(joint_reported_position[5]))
+  # label6.setText(str(joint_reported_position[6]))
+  # label_pwr_status.setText(str((str('BAT % : ') + str((Power.getBatteryLevel())))))
 
 # Describe this function...
-def calc_position():
-  global stream_is_paused, k, joint_init_pos, joint_reported_position, joint_values_measured, joint_signs, image0, label_pwr_status, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
-  for k in range(7):
-    joint_reported_position[int(k - 1)] = joint_init_pos[int(k - 1)] + joint_signs[int(k - 1)] * joint_values_measured[int(k - 1)]
-
-
-# Describe this function...
-def init_position():
-  global stream_is_paused, k, joint_init_pos, joint_reported_position, joint_values_measured, joint_signs, image0, label_pwr_status, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
-  joint_init_pos = [roller485_0.get_motor_position_readback(), roller485_1.get_motor_position_readback(), roller485_2.get_motor_position_readback(), roller485_3.get_motor_position_readback(), roller485_4.get_motor_position_readback(), roller485_5.get_motor_position_readback(), 0]
-  time.sleep_ms(100)
-
-
-def key_0_wasPressed_event(state):
-  global image0, label_pwr_status, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, stream_is_paused, joint_init_pos, joint_reported_position, k, joint_values_measured, joint_signs
-  key_0.set_color(0x33ff33)
-  joystick2_0.fill_color(0x33ff33)
-  label_zerod.setColor(0xffffff, 0x33cc00)
-  init_position()
-
-
-def key_0_wasDoubleclicked_event(state):
-  global image0, label_pwr_status, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, stream_is_paused, joint_init_pos, joint_reported_position, k, joint_values_measured, joint_signs
-  stream_is_paused = not stream_is_paused
+def zero__and_steam():
+  global joint_values_measured, stream_is_paused, joint_init_pos, k, joint_reported_position, previous_touch, joint_signs, positiontouch, grbl_value, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
+  if previous_touch < (M5.Touch.getCount()) and (M5.Touch.getX()) > 15 and (M5.Touch.getX()) < 85 and (M5.Touch.getY()) > 120 and (M5.Touch.getY()) < 190:
+    key_0.set_color(0x33ff33)
+    joystick2_0.fill_color(0x33ff33)
+    label_zerod.setColor(0xffffff, 0x33cc00)
+    init_position()
+  if previous_touch < (M5.Touch.getCount()) and (M5.Touch.getX()) > 235 and (M5.Touch.getX()) < 305 and (M5.Touch.getY()) > 120 and (M5.Touch.getY()) < 190:
+    stream_is_paused = not stream_is_paused
   if stream_is_paused:
     key_0.set_color(0xffcc00)
     joystick2_0.fill_color(0xffcc66)
@@ -78,15 +104,56 @@ def key_0_wasDoubleclicked_event(state):
     joystick2_0.fill_color(0x33ff33)
     label_stream_state.setColor(0xffffff, 0x33cc00)
 
+# Describe this function...
+def Roller_Positions():
+  global joint_values_measured, stream_is_paused, joint_init_pos, k, joint_reported_position, previous_touch, joint_signs, positiontouch, grbl_value, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
+  roller485_5.set_motor_position(-70)
+
+# Describe this function...
+def init_position():
+  global joint_values_measured, stream_is_paused, joint_init_pos, k, joint_reported_position, previous_touch, joint_signs, positiontouch, grbl_value, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
+  joint_init_pos = [roller485_0.get_motor_position_readback(), roller485_1.get_motor_position_readback(), roller485_2.get_motor_position_readback(), roller485_3.get_motor_position_readback(), roller485_4.get_motor_position_readback(), roller485_5.get_motor_position_readback(), 0]
+  time.sleep_ms(100)
+
+# Describe this function...
+def calc_position():
+  global joint_values_measured, stream_is_paused, joint_init_pos, k, joint_reported_position, previous_touch, joint_signs, positiontouch, grbl_value, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
+  for k in range(7):
+    joint_reported_position[int(k - 1)] = joint_init_pos[int(k - 1)] + joint_signs[int(k - 1)] * joint_values_measured[int(k - 1)]
+
+
+
+def key_0_wasDoubleclicked_event(state):
+  global key_0_pressed, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, joint_values_measured, stream_is_paused, joint_init_pos, joint_reported_position, k, previous_touch, joint_signs, positiontouch, grbl_value
+  stream_is_paused = not stream_is_paused
+  if stream_is_paused:
+    key_0.set_color(0xffcc00)
+    joystick2_0.fill_color(0xffcc66)
+    label_stream_state.setColor(0xffffff, 0xffcc00)
+  else:
+    key_0.set_color(0x33ff33)
+    joystick2_0.fill_color(0x33ff33)
+    label_stream_state.setColor(0xffffff, 0x33cc00)
+  key_0_pressed = 2
+
+
+def key_0_wasPressed_event(state):
+  global key_0_pressed, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, joint_values_measured, stream_is_paused, joint_init_pos, joint_reported_position, k, previous_touch, joint_signs, positiontouch, grbl_value
+  key_0.set_color(0x33ff33)
+  joystick2_0.fill_color(0x33ff33)
+  label_zerod.setColor(0xffffff, 0x33cc00)
+  init_position()
+  key_0_pressed = 1
+
 
 def setup():
-  global image0, label_pwr_status, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, stream_is_paused, joint_init_pos, joint_reported_position, k, joint_values_measured, joint_signs
-
+  global now, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, joint_values_measured, stream_is_paused, joint_init_pos, joint_reported_position, k, previous_touch, joint_signs, positiontouch, grbl_value
+  
   M5.begin()
   Widgets.setRotation(1)
   Widgets.fillScreen(0xffffff)
-  image0 = Widgets.Image("/flash/res/img/UR.png", 121, 73, scale_x=.5, scale_y=.5)
   label_pwr_status = Widgets.Label("pwr", 1, 41, 1.0, 0x008616, 0xffffff, Widgets.FONTS.DejaVu12)
+  rect0 = Widgets.Rectangle(-121, 74, 54, 54, 0xffffff, 0xffffff)
   label0 = Widgets.Label("0", 251, 141, 1.0, 0x008616, 0xffffff, Widgets.FONTS.DejaVu12)
   label1 = Widgets.Label("1", 224, 123, 1.0, 0x008616, 0xffffff, Widgets.FONTS.DejaVu12)
   label3 = Widgets.Label("3", 185, 49, 1.0, 0x008616, 0xffffff, Widgets.FONTS.DejaVu12)
@@ -99,10 +166,12 @@ def setup():
   label_wifi_status = Widgets.Label("Wifi_status", 2, 25, 1.0, 0x008616, 0xffffff, Widgets.FONTS.DejaVu12)
   label5 = Widgets.Label("5", 106, 110, 1.0, 0x008616, 0xffffff, Widgets.FONTS.DejaVu12)
   label_stream_state = Widgets.Label("STREAMING", 223, 217, 1.0, 0xffffff, 0xff0000, Widgets.FONTS.DejaVu12)
+  circle0 = Widgets.Circle(50, 155, 35, 0xfb0000, 0xff0000)
+  circle1 = Widgets.Circle(270, 155, 35, 0x000000, 0x000000)
 
+  uart1 = UART(1, baudrate=115200, bits=8, parity=None, stop=1, tx=9, rx=10)
   wlan = network.WLAN(network.STA_IF)
-  i2c0 = I2C(0, scl=Pin(1), sda=Pin(2), freq=100000)
-  joystick2_0 = Joystick2Unit(i2c0, 0x63)
+  i2c0 = I2C(0, scl=Pin(1), sda=Pin(2), freq=400000)
   roller485_0 = Roller485Unit(i2c0, address=0x64, mode=Roller485Unit.I2C_MODE)
   roller485_1 = Roller485Unit(i2c0, address=0x65, mode=Roller485Unit.I2C_MODE)
   roller485_2 = Roller485Unit(i2c0, address=0x66, mode=Roller485Unit.I2C_MODE)
@@ -110,57 +179,87 @@ def setup():
   roller485_4 = Roller485Unit(i2c0, address=0x69, mode=Roller485Unit.I2C_MODE)
   roller485_5 = Roller485Unit(i2c0, address=0x68, mode=Roller485Unit.I2C_MODE)
   key_0 = KeyUnit((8, 9))
-  key_0.setCallback(type=key_0.CB_TYPE.WAS_PRESSED, cb=key_0_wasPressed_event)
   key_0.setCallback(type=key_0.CB_TYPE.WAS_DOUBLECLICKED, cb=key_0_wasDoubleclicked_event)
-  roller485_0.set_motor_mode(4)
-  roller485_1.set_motor_mode(4)
-  roller485_2.set_motor_mode(4)
-  roller485_3.set_motor_mode(4)
-  roller485_4.set_motor_mode(4)
-  roller485_5.set_motor_mode(4)
+  key_0.setCallback(type=key_0.CB_TYPE.WAS_PRESSED, cb=key_0_wasPressed_event)
+  roller485_0.set_motor_mode(2)
+  roller485_1.set_motor_mode(2)
+  roller485_2.set_motor_mode(2)
+  roller485_3.set_motor_mode(2)
+  roller485_4.set_motor_mode(2)
+  roller485_5.set_motor_mode(2)
+  roller485_5.set_motor_output_state(1)
+  roller485_5.set_position_max_current(40000)
   joint_values_measured = [0] * 7
   joint_init_pos = [0] * 7
   joint_reported_position = [0] * 7
   joint_signs = [-1, -1, -1, -1, -1, -1, 1]
   try:
-    wlan.connect('UW MPSK', 'acH4wUe?x&')
+    wlan.active(True)
+    wlan.connect('geodude-link', 'ihave2arms')
     label_wifi_status.setText(str((str('IP: ') + str((wlan.ifconfig()[0])))))
+    print("connected!")
   except:
     label_wifi_status.setText(str((str('IP: ') + str('Not Connected'))))
-
+    print("not connected")
+  synced = False
+  while synced == False: 
+    try:
+      # Set NTP host if desired (default is pool.ntp.org)
+      ntptime.host = 'pool.ntp.org'
+      start = time.ticks_ms()
+      ntptime.settime()  # Updates the machine RTC
+      delta = time.ticks_ms()
+      # Check current RTC time
+      start = time.ticks_ms()
+      ntptime.settime()  # Updates the machine RTC
+      delta = time.ticks_ms() - start
+      t = time.localtime()
+      synced = True
+      print("RTC time synced:", t, "in: ", delta)
+    except Exception as e:
+      print("Failed to sync NTP:", e)
   key_0.set_color(0xff6600)
+  joystick2_0 = Joystick2Unit(i2c0, 0x63)
   joystick2_0.fill_color(0xff0000)
   stream_is_paused = True
   init_position()
+  circle0.setCursor(x=50, y=155)
+  circle0.setRadius(r=35)
+  circle0.setColor(color=0xff0000, fill_c=0xff0000)
+  previous_touch = 0
+  positiontouch = 0
+  grbl_value = 0
+  now = time.ticks_ms()
 
 
 def loop():
-  global image0, label_pwr_status, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, stream_is_paused, joint_init_pos, joint_reported_position, k, joint_values_measured, joint_signs
-  key_0.tick(None)
+  global label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, joint_values_measured, stream_is_paused, joint_init_pos, joint_reported_position, k, previous_touch, joint_signs, positiontouch, grbl_value
+  start = time.ticks_ms()
   M5.update()
-  joint_values_measured = [roller485_0.get_motor_position_readback(), roller485_1.get_motor_position_readback(), roller485_2.get_motor_position_readback(), roller485_3.get_motor_position_readback(), roller485_4.get_motor_position_readback(), roller485_5.get_motor_position_readback(), joystick2_0.get_y_position()]
-  if not stream_is_paused:
-    calc_position()
-    print({'iniital_positions':joint_init_pos,'measured_positions':joint_values_measured,'joint_positions:':joint_reported_position})
-    time.sleep_ms(1)
-  label0.setText(str(joint_reported_position[0]))
-  label1.setText(str(joint_reported_position[1]))
-  label2.setText(str(joint_reported_position[2]))
-  label3.setText(str(joint_reported_position[3]))
-  label4.setText(str(joint_reported_position[4]))
-  label5.setText(str(joint_reported_position[5]))
-  label6.setText(str(joint_reported_position[6]))
-  label_pwr_status.setText(str((str('BAT % : ') + str((Power.getBatteryLevel())))))
+  # T1 = time.ticks_ms() - start
+  key_0.tick(None)
+  # T2 = time.ticks_ms() - start
+  # zero__and_steam()
+  # T3 = time.ticks_ms() - start
+  Stuff_in_loop()
+  # T4 = time.ticks_ms() - start
+  # print(T1, T2, T4)
+
 
 
 if __name__ == '__main__':
   try:
     setup()
+    last_time = time.ticks_ms()
     while True:
       loop()
+      while time.ticks_ms() - last_time < 10:
+        pass
+      last_time = time.ticks_ms()
   except (Exception, KeyboardInterrupt) as e:
     try:
       from utility import print_error_msg
       print_error_msg(e)
     except ImportError:
       print("please update to latest firmware")
+
