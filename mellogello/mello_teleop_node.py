@@ -2,8 +2,7 @@
 """
 Script to teleoperate the robot arm using Mello device.
 
-This script reads joint positions from the Mello device at 20 Hz and forwards
-them directly to the position controller via position commands.
+This script reads joint positions from the Mello device at 100 Hz and publishes them to a joint state topic.
 """
 
 import time
@@ -13,17 +12,20 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float64MultiArray
 from typing import Optional
-from mello_teleop import MelloTeleopInterface
+# add geodude_gello_teleop to path
+from mello_interface import MelloTeleopInterface
+
+# use joint trajectory controller through the topic approach:
 
 class MelloTeleopNode(Node):
     """ROS2 node to teleoperate robot arm using Mello device."""
 
-    def __init__(self, arm_name: str):
+    def __init__(self, arm_name: str, use_dummy: bool = False):
         super().__init__('mello_teleop_node')
         
         self.arm_name = arm_name
+        self.use_dummy = use_dummy
         self.curr_state: Optional[JointState] = None
         self.mello: Optional[MelloTeleopInterface] = None
         # Parameters
@@ -106,12 +108,21 @@ class MelloTeleopNode(Node):
             return
         
         values = self.mello.get_latest_values()
-        joints = np.array(values[:-1])  # First 6 values are joints
-        sec = self.mello.sec
-        nsec = self.mello.nsec
-        if len(joints) != 6:
-            self.get_logger().error(f'Mello returned {len(joints)} joints, expected 6')
+        if values is [] or len(values) != 21:
+            print(len(values))
             return
+        joints = np.array(values[:6])  # First 6 values are joints
+        joint_vel = np.array(values[6:12])
+        joystick_y_position = values[12]
+        # these additional values are not currently used but we will use them later
+        joystick_x_position = values[13]
+        button_pressed = values[14]
+        key_0_pressed = values[15]
+        dt = values[16]
+        sec = values[17]
+        nsec = values[18]
+        packet_loss_percentage = values[19]
+        packet_time = values[20]
         if joints.all() == 0:
             return
         if self.curr_state is None:
@@ -120,23 +131,31 @@ class MelloTeleopNode(Node):
         if self.offset is None:
             self.offset = joints - self.get_joints_aligned_to_names()[0]
         self.joint_values = joints - self.offset
-        self.gripper_value = values[-1]  # Last value is gripper
+        self.gripper_value = joystick_y_position
         # publish joint
         joint_msg = JointState()
+        # joint_msg.header.stamp.sec = sec
+        # joint_msg.header.stamp.nanosec = nsec
+        joint_msg.name = self.full_joint_names
+        joint_msg.position = [0.0] + self.joint_values.tolist() + [self.gripper_value]
+        joint_msg.velocity = [0.0] + joint_vel.tolist() + [0.0]
         joint_msg.header.stamp.sec = sec
         joint_msg.header.stamp.nanosec = nsec
-        joint_msg.name = self.full_joint_names
-        # vention is 0 so set it to 0
-        joint_msg.position = [0.0] + self.joint_values.tolist() + [self.gripper_value]
         self.joint_publisher.publish(joint_msg)
 
 def main(args=None):
     """Main function."""
+    # Check if user wants to use dummy interface
+    use_dummy = False
+    if len(sys.argv) > 1 and sys.argv[1] == '--dummy':
+        use_dummy = True
+        print("Running in dummy mode (no hardware required)")
+    
     # Initialize ROS2
     rclpy.init(args=args)
     
     # Create node
-    node = MelloTeleopNode(arm_name='right')
+    node = MelloTeleopNode(arm_name='right', use_dummy=use_dummy)
     node.initialize_mello()
     rclpy.spin_once(node)
     while rclpy.ok():

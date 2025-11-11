@@ -55,35 +55,32 @@ positiontouch = None
 grbl_value = None
 import struct
 # Describe this function...
-def Stuff_in_loop():
+def read_sensors_write_data():
   global key_0_pressed, packets_sent, now, joint_values_measured, stream_is_paused, joint_init_pos, k, joint_reported_position, previous_touch, joint_signs, positiontouch, grbl_value, label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5
-  joint_values_measured = [roller485_0.get_motor_position_readback(), roller485_1.get_motor_position_readback(), roller485_2.get_motor_position_readback(), roller485_3.get_motor_position_readback(), roller485_4.get_motor_position_readback(), roller485_5.get_motor_position_readback(), joystick2_0.get_y_position()]
-  t_ns = time.time_ns()
-  dt = time.ticks_ms() - now
-  now = time.ticks_ms()
+  joint_values_measured = [roller485_0.get_motor_position_readback(),
+                           roller485_1.get_motor_position_readback(), 
+                          -roller485_2.get_motor_position_readback(), 
+                           roller485_3.get_motor_position_readback(), 
+                           roller485_4.get_motor_position_readback(), 
+                           roller485_5.get_motor_position_readback(), 
+                           joystick2_0.get_y_position(),
+                           joystick2_0.get_x_position()]
+  joint_vel  = [roller485_0.get_motor_speed_readback(),
+                roller485_1.get_motor_speed_readback(), 
+               -roller485_2.get_motor_speed_readback(), 
+                roller485_3.get_motor_speed_readback(), 
+                roller485_4.get_motor_speed_readback(), 
+                roller485_5.get_motor_speed_readback()]
+  dt = time.time_ns() - now
+  now = time.time_ns()
   button_pressed = joystick2_0.get_button_status()
-  sec = int(t_ns // 1_000_000_000)  # integer seconds
-  nsec = int(t_ns % 1_000_000_000)  # remaining nanoseconds
   if not stream_is_paused:
-    calc_position()
+    # calc_position()
     header = b'\xAA\xBB'
     packets_sent += 1
-    # print({'iniital_positions':joint_init_pos,'measured_positions':joint_values_measured,'joint_positions:':joint_reported_position, 'dt:':dt, 'ps':packets_sent})
-    # print({'joint_positions:':joint_reported_position, 'dt:':dt, 'ps':packets_sent})
-    # data = struct.pack('<7f2i', *(joint_reported_position + [dt, packets_sent]))
-    data = struct.pack('<8f6i', *(joint_reported_position + [joystick2_0.get_x_position(), dt, packets_sent, button_pressed, key_0_pressed, sec, nsec]))
+    data = struct.pack('<14f4i', *(joint_values_measured + joint_vel + [dt, packets_sent, button_pressed, key_0_pressed]))
     sys.stdout.buffer.write(header + data)
-    # sys.stdout.flush()
-    # time.sleep_ms(1)
-  # key_0_pressed = 0
-  # label0.setText(str(joint_reported_position[0]))
-  # label1.setText(str(joint_reported_position[1]))
-  # label2.setText(str(joint_reported_position[2]))
-  # label3.setText(str(joint_reported_position[3]))
-  # label4.setText(str(joint_reported_position[4]))
-  # label5.setText(str(joint_reported_position[5]))
-  # label6.setText(str(joint_reported_position[6]))
-  # label_pwr_status.setText(str((str('BAT % : ') + str((Power.getBatteryLevel())))))
+
 
 # Describe this function...
 def zero__and_steam():
@@ -193,31 +190,7 @@ def setup():
   joint_init_pos = [0] * 7
   joint_reported_position = [0] * 7
   joint_signs = [-1, -1, -1, -1, -1, -1, 1]
-  try:
-    wlan.active(True)
-    wlan.connect('geodude-link', 'ihave2arms')
-    label_wifi_status.setText(str((str('IP: ') + str((wlan.ifconfig()[0])))))
-    print("connected!")
-  except:
-    label_wifi_status.setText(str((str('IP: ') + str('Not Connected'))))
-    print("not connected")
-  synced = False
-  while synced == False: 
-    try:
-      # Set NTP host if desired (default is pool.ntp.org)
-      ntptime.host = 'pool.ntp.org'
-      start = time.ticks_ms()
-      ntptime.settime()  # Updates the machine RTC
-      delta = time.ticks_ms()
-      # Check current RTC time
-      start = time.ticks_ms()
-      ntptime.settime()  # Updates the machine RTC
-      delta = time.ticks_ms() - start
-      t = time.localtime()
-      synced = True
-      print("RTC time synced:", t, "in: ", delta)
-    except Exception as e:
-      print("Failed to sync NTP:", e)
+
   key_0.set_color(0xff6600)
   joystick2_0 = Joystick2Unit(i2c0, 0x63)
   joystick2_0.fill_color(0xff0000)
@@ -236,30 +209,23 @@ def loop():
   global label_pwr_status, rect0, label0, label1, label3, title_bar, label_zerod, label2, label4, label_position_linked, label6, label_wifi_status, label5, label_stream_state, circle0, circle1, uart1, wlan, i2c0, key_0, joystick2_0, roller485_0, roller485_1, roller485_2, roller485_3, roller485_4, roller485_5, joint_values_measured, stream_is_paused, joint_init_pos, joint_reported_position, k, previous_touch, joint_signs, positiontouch, grbl_value
   start = time.ticks_ms()
   M5.update()
-  # T1 = time.ticks_ms() - start
   key_0.tick(None)
-  # T2 = time.ticks_ms() - start
-  # zero__and_steam()
-  # T3 = time.ticks_ms() - start
-  Stuff_in_loop()
-  # T4 = time.ticks_ms() - start
-  # print(T1, T2, T4)
+  read_sensors_write_data()
 
 
 
 if __name__ == '__main__':
   try:
     setup()
-    last_time = time.ticks_ms()
+    last_time = time.time_ns()
     while True:
       loop()
-      while time.ticks_ms() - last_time < 10:
+      while time.time_ns() - last_time < 1e7:
         pass
-      last_time = time.ticks_ms()
+      last_time = time.time_ns()
   except (Exception, KeyboardInterrupt) as e:
     try:
       from utility import print_error_msg
       print_error_msg(e)
     except ImportError:
       print("please update to latest firmware")
-
