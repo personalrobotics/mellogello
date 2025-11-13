@@ -6,26 +6,22 @@ This script reads joint positions from the Mello device at 100 Hz and publishes 
 """
 
 import time
-import sys
-import math
 import rclpy
 from rclpy.node import Node
 import numpy as np
 from sensor_msgs.msg import JointState
 from typing import Optional
-# add geodude_gello_teleop to path
-from mello_interface import MelloTeleopInterface
+from mello_teleop import MelloTeleopInterface
 
 # use joint trajectory controller through the topic approach:
 
 class MelloTeleopNode(Node):
     """ROS2 node to teleoperate robot arm using Mello device."""
 
-    def __init__(self, arm_name: str, use_dummy: bool = False):
+    def __init__(self, arm_name: str):
         super().__init__('mello_teleop_node')
         
         self.arm_name = arm_name
-        self.use_dummy = use_dummy
         self.curr_state: Optional[JointState] = None
         self.mello: Optional[MelloTeleopInterface] = None
         # Parameters
@@ -34,7 +30,6 @@ class MelloTeleopNode(Node):
         self.joint_values = None
         self.last_joint_values = None
         self.gripper_value = None
-        self.max_packet_loss_percentage = 0.0
         self.packet_time = []
         self.dt = []
         # this corresponds to the order in which the joints are read from the Mello device
@@ -145,17 +140,12 @@ class MelloTeleopNode(Node):
 
 def main(args=None):
     """Main function."""
-    # Check if user wants to use dummy interface
-    use_dummy = False
-    if len(sys.argv) > 1 and sys.argv[1] == '--dummy':
-        use_dummy = True
-        print("Running in dummy mode (no hardware required)")
-    
+    # Check if user wants to use dummy interface    
     # Initialize ROS2
     rclpy.init(args=args)
     
     # Create node
-    node = MelloTeleopNode(arm_name='right', use_dummy=use_dummy)
+    node = MelloTeleopNode(arm_name='right')
     node.initialize_mello()
     rclpy.spin_once(node)
     while rclpy.ok():
