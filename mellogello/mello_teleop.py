@@ -5,49 +5,22 @@ import threading
 import ast
 import math
 import time
-
-class DummyMelloTeleopInterface:
-    """A dummy version of MelloTeleopInterface that returns fixed joint positions for testing."""
-    def __init__(self, port=None, baudrate=None):
-        """
-        Initialize with fixed joint positions.
-        port and baudrate are ignored, they're just here for API compatibility.
-        """
-        # Initialize with a reasonable "home" position in radians
-        self.fixed_joints = [0, -math.pi/2, math.pi/2, -math.pi/2, -math.pi/2, 0]
-        # Concatenate joints with gripper value (1 for open, -1 for closed)
-        self.latest_values = self.fixed_joints + [1]  # Gripper stays open
-        print("Initialized DummyMelloTeleopInterface with fixed joint positions")
-        print(f"Fixed joints (rad): {self.fixed_joints}")
-        print(f"Fixed joints (deg): {[math.degrees(j) for j in self.fixed_joints]}")
-        print(f"Latest values (joints + gripper): {self.latest_values}")
-
-    def get_latest_values(self):
-        """Get the fixed joint positions and gripper state as concatenated array."""
-        return self.latest_values
-
-    def cleanup(self):
-        """Dummy cleanup method for API compatibility."""
-        pass
-
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
+import struct
 
 class MelloTeleopInterface:
-    def __init__(self, port='/dev/serial/by-id/usb-M5Stack_Technology_Co.__Ltd_M5Stack_UiFlow_2.0_24587ce945900000-if00', baudrate=115200):
+    def __init__(self, port='/dev/serial/by-id/usb-M5Stack_Technology_Co.__Ltd_M5Stack_UiFlow_2.0_4827e266dd480000-if00', baudrate=115200):
         self.port = port
         self.baudrate = baudrate
         self.serial = None
         self._setup_serial()
-        # Initialize previous values
-        self.prev_joints = [0] * 6
-        self.prev_gripper = 0
         # Concatenate joints with gripper value (1 for open, -1 for closed)
-        self.latest_values = self.prev_joints + [1]  # Start with gripper open
+        self.latest_values = []  # Start with gripper open
         self.running = True
+        self.packets_received = 0
+        self.start_packets_sent = None
+        self.last_packet_time = time.perf_counter()
+        self.packets_sent = 0
+        self.dt = 0
         self._start_read_thread()
 
     def _setup_serial(self):
@@ -55,7 +28,7 @@ class MelloTeleopInterface:
         try:
             self.serial = serial.Serial(
                 port=self.port,
-                baudrate=self.baudrate,
+                baudrate=self.baudrate,# baud rate is actually ignored over USB CDC: https://github.com/hathach/tinyusb/discussions/1659
                 timeout=1  # 1 second timeout
             )
             print(f"Successfully connected to {self.port}")
@@ -69,47 +42,63 @@ class MelloTeleopInterface:
 
     def _read_thread(self):
         """Background thread to continuously read from serial port."""
+        FORMAT = '<14f4i'  # little-endian, 6 floats + 2 ints
+        PACKET_SIZE = struct.calcsize(FORMAT)
+        SYNC = b'\xAA\xBB'
+        SYNC_SIZE = len(SYNC)
         while self.running:
-            try:
-                if self.serial.in_waiting:
-                    line = self.serial.readline().decode('utf-8').strip()
-                    try:
-                        data = ast.literal_eval(line)
-                        joint_positions = data.get('joint_positions:', [0]*7)
+            now = time.perf_counter() # time right before the read is as close as we can get to the actual time of the packet
+            if self.serial.in_waiting>=SYNC_SIZE:
+                read_sync = self.serial.read(SYNC_SIZE)
+                if SYNC == read_sync:
+                    with self.read_thread.lock:
+                        raw_data = self.serial.read(PACKET_SIZE)
+                        # Unpack into Python values
+                        unpacked = struct.unpack(FORMAT, raw_data)
                         
-                        # Take first 6 values for joints (in degrees) and convert to radians
-                        joints_deg = joint_positions[:6]
-                        # Negate joint 2 (index 2)
-                        joints_deg[2] = -1 * joints_deg[2]
+                        # Extract components
+                        joints_deg = list(unpacked[:6])
+                        joystick_y_position = unpacked[6]
+                        joystick_x_position = unpacked[7]
+                        joint_velocities = list(unpacked[8:14])
+                        self.dt = unpacked[14] * 1e-6 # dt is in milliseconds
+                        self.packets_sent = unpacked[15]
+                        button_pressed = unpacked[16]
+                        key_0_pressed = unpacked[17]
+                        sec = int(now)
+                        nsec = int((now - sec)*1e9)
+                        # Apply your same logic as before
                         joints_rad = self._degrees_to_radians(joints_deg)
-                        
-                        # Get gripper value (last value)
-                        gripper_value = joint_positions[-1] if len(joint_positions) > 6 else self.prev_gripper
-                        
-                        # Update values if joints are not all zeros
-                        if not all(j == 0 for j in joints_rad):
-                            self.prev_joints = joints_rad
-                        self.prev_gripper = gripper_value
-                        
-                        # Convert gripper value to 1 (open) or -1 (closed)
-                        gripper_state = 1 if gripper_value >= 0 else -1
-                        self.latest_values = self.prev_joints + [gripper_state]
-                        
-                    except (ValueError, SyntaxError) as e:
-                        print(f"Error parsing serial data: {e}")
-            except Exception as e:
-                print(f"Error reading serial data: {e}")
-            time.sleep(0.01)  # Small sleep to prevent busy waiting
+                        joint_velocities_rad = self._degrees_to_radians(joint_velocities)
+                        valid, packet_loss_percentage, packet_time, dt = self.get_packet_loss()
+                        self.packets_received += 1
+                        self.packet_time = time.perf_counter() - self.last_packet_time
+                        self.last_packet_time = time.perf_counter()
+                        if self.start_packets_sent is None:
+                            self.start_packets_sent = self.packets_sent
+                        if not valid:
+                            continue
+                        self.latest_values = joints_rad + joint_velocities_rad + [joystick_y_position, 
+                        joystick_x_position, button_pressed, key_0_pressed, self.dt, sec, nsec, packet_loss_percentage, packet_time]
 
     def _start_read_thread(self):
         """Start the background reading thread."""
         self.read_thread = threading.Thread(target=self._read_thread)
         self.read_thread.daemon = True
+        self.read_thread.lock = threading.Lock()
         self.read_thread.start()
 
     def get_latest_values(self):
         """Get the most recent joint and gripper values as concatenated array."""
         return self.latest_values
+    
+    def get_packet_loss(self):
+        """Get the packet loss as a percentage."""
+        if self.packets_received == 0 or self.packets_sent == self.start_packets_sent or self.start_packets_sent is None:
+            return False, 0.0, 0, 0
+        packets_expected = self.packets_sent - self.start_packets_sent
+        packet_loss_percentage = 100 *(packets_expected - self.packets_received) / packets_expected
+        return True, packet_loss_percentage, self.packet_time*1e3, self.dt
 
     def cleanup(self):
         """Clean up resources."""
