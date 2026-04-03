@@ -25,7 +25,7 @@
         "--prompt-device-ready",
         "--with-assets",
         "--source",
-        "firmware/UR_MelloGello.py",
+        "reference/main.py",
         "--target",
         ":main.py"
       ],
@@ -42,7 +42,7 @@
         "--with-assets",
         "--with-secrets",
         "--source",
-        "firmware/UR_MelloGello.py",
+        "reference/main.py",
         "--target",
         ":main.py"
       ],

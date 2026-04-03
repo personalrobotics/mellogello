@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 DEFAULT_BAUDRATE = 115200
-DEFAULT_SOURCE = Path("firmware/UR_MelloGello.py")
+DEFAULT_SOURCE = Path("reference/main.py")
 DEFAULT_TARGET = ":main.py"
-DEFAULT_SETTINGS = Path("firmware/mello_settings.py")
-DEFAULT_ASSETS_DIR = Path("firmware/assets")
+DEFAULT_SETTINGS = Path("reference/mello_settings.py")
+DEFAULT_ASSETS_DIR = Path("reference/assets")
 DEFAULT_ASSET_MANIFEST = DEFAULT_ASSETS_DIR / "manifest.txt"
 DEFAULT_SECRETS_SOURCE = Path(".secrets/wifi_secrets.py")
 DEFAULT_SECRETS_TARGET = ":wifi_secrets.py"
@@ -201,6 +201,10 @@ def _deploy(
 
     _ensure_mpremote()
 
+    # In normal run mode, proactively interrupt any running script before copy.
+    _prepare_port_for_repl(port)
+    time.sleep(0.25)
+
     _copy_file(port=port, source=source, target=target)
 
     if settings_source.exists():
@@ -288,7 +292,7 @@ def _parser() -> argparse.ArgumentParser:
     deploy.add_argument(
         "--with-assets",
         action="store_true",
-        help="Upload files listed in firmware/assets/manifest.txt to device assets dir",
+        help="Upload files listed in reference/assets/manifest.txt to device assets dir",
     )
     deploy.add_argument(
         "--assets-dir",
