@@ -18,8 +18,8 @@ Use one of these official M5Stack tools:
 Recommended sequence:
 
 1. Connect CoreS3 over USB.
-2. Put device in the required flashing mode for the burner tool.
-3. Flash a compatible CoreS3 UiFlow2 or MicroPython runtime.
+2. Put CoreS3 in flashing mode: hold the reset button (not power) until the adjacent green LED flashes.
+3. In UiFlow2, flash an empty CoreS3 project as the initial runtime/bootstrap image.
 4. Reboot the board and confirm it appears as a serial port.
 5. Return to this repository and continue with the VS Code workflow below.
 
