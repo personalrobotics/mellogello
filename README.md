@@ -6,6 +6,28 @@ This guide covers the setup and usage of teleoperation for the robot arm using t
 For hardware setup, refer to the [Mello Hardware Setup Guide](https://github.com/emmarUW/mello_gello).
 For firmware setup, refer to the [Mello Firmware Setup Guide](/firmware/README.md).
 
+## First-Time Device Flash (Required)
+
+For a factory-fresh CoreS3, you must flash compatible firmware once before using the VS Code deploy tasks.
+
+Use one of these official M5Stack tools:
+
+1. UiFlow2 Web Burner: [https://uiflow2.m5stack.com/](https://uiflow2.m5stack.com/)
+2. M5Burner (desktop): [https://docs.m5stack.com/en/uiflow/m5burner/intro](https://docs.m5stack.com/en/uiflow/m5burner/intro)
+
+Recommended sequence:
+
+1. Connect CoreS3 over USB.
+2. Put device in the required flashing mode for the burner tool.
+3. Flash a compatible CoreS3 UiFlow2 or MicroPython runtime.
+4. Reboot the board and confirm it appears as a serial port.
+5. Return to this repository and continue with the VS Code workflow below.
+
+Important:
+
+- The burner step is one-time bootstrap.
+- Day-to-day code updates should use the VS Code tasks in this repository.
+
 ## VS Code Workflow (Recommended)
 
 This repository now includes a VS Code-based deploy workflow so users can update firmware without relying on the UiFlow project upload flow for day-to-day changes.
