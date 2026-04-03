@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Mello: Install Host Dependencies",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "pip", "install", "-r", "requirements-host.txt"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Mello: List Serial Ports",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["tools/mello_cli.py", "list-ports"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Mello: Deploy Firmware",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "tools/mello_cli.py",
+        "deploy",
+        "--prompt-device-ready",
+        "--with-assets",
+        "--source",
+        "firmware/UR_MelloGello.py",
+        "--target",
+        ":main.py"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Mello: Deploy Firmware (With Secrets)",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "tools/mello_cli.py",
+        "deploy",
+        "--prompt-device-ready",
+        "--with-assets",
+        "--with-secrets",
+        "--source",
+        "firmware/UR_MelloGello.py",
+        "--target",
+        ":main.py"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Mello: Reboot Device",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["tools/mello_cli.py", "reboot"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Mello: Serial Monitor",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["tools/mello_cli.py", "monitor"],
+      "isBackground": false,
+      "problemMatcher": []
+    }
+  ]
+}
