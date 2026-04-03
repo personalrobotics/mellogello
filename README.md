@@ -41,12 +41,34 @@ This repository now includes a VS Code-based deploy workflow so users can update
 
 1. Run task: `Mello: Deploy Firmware`.
 2. Run task: `Mello: Serial Monitor`.
+3. On device, button behavior is:
+   - Press and hold to ZERO.
+   - Double click to start/stop stream output.
 
 Optional tasks:
 
 - `Mello: Deploy Firmware (With Secrets)` uploads local Wi-Fi secrets.
 - `Mello: List Serial Ports` prints detected COM/TTY devices.
 - `Mello: Reboot Device` sends a soft reset via mpremote.
+
+### Partial Rig Mode (Missing Motors)
+
+Firmware supports two behaviors when one or more Roller485 motors are missing.
+
+- `ALLOW_PARTIAL_RIG = True` (permissive mode):
+   - Firmware still boots and streams.
+   - Missing motors are replaced with fallback values (`MISSING_MOTOR_VALUE`, default `0.0`).
+   - UI shows a warning that the rig is partial.
+- `ALLOW_PARTIAL_RIG = False` (strict mode):
+   - Firmware treats missing motors as an error during setup.
+   - This is useful when you want to enforce a complete 6-motor rig.
+
+These settings are defined in `reference/mello_settings.py` and uploaded during deploy.
+
+### VS Code Task Note
+
+VS Code tasks run whatever command is currently saved in `.vscode/tasks.json`.
+If a task run shows old arguments after edits, reload the VS Code window once so the task runner picks up the latest task definition.
 
 ## Important: Serial Output Is Binary During Streaming
 
